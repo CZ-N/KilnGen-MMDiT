@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>MMDiT · 多模态协同数据生成</title>
+  <meta name="description" content="基于 MMDiT（Multi-Modal Diffusion Transformer）的多模态协同数据生成模型前端页面（玻璃拟态暗色风格）"/>
+
+  <style>
+    :root{
+      --fg: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.72);
+      --muted2: rgba(255,255,255,.62);
+
+      --glass: rgba(20,20,20,.32);
+      --glass2: rgba(20,20,20,.38);
+      --border: rgba(255,255,255,.14);
+      --border2: rgba(255,255,255,.18);
+
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --shadow2: 0 10px 30px rgba(0,0,0,.35);
+
+      --radius: 18px;
+      --radius2: 14px;
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans";
+
+      --ok: rgba(74,222,128,.95);
+      --warn: rgba(251,191,36,.95);
+      --bad: rgba(248,113,113,.95);
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family: var(--sans);
+      color: var(--fg);
+      overflow-x:hidden;
+
+      /* 背景图与前面页面一致 */
+      background: url("assets/bg.jpg") center/cover no-repeat fixed;
+    }
+
+    /* 暗色遮罩，做出截图那种氛围 */
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      background:
+        radial-gradient(1200px 800px at 25% 10%, rgba(0,0,0,.40), transparent 60%),
+        radial-gradient(900px 600px at 75% 25%, rgba(0,0,0,.32), transparent 60%),
+        linear-gradient(to bottom, rgba(0,0,0,.55), rgba(0,0,0,.72));
+      pointer-events:none;
+      z-index:-2;
+    }
+
+    /* 轻微雾化层 */
+    body::after{
+      content:"";
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,.10);
+      backdrop-filter: blur(0px);
+      pointer-events:none;
+      z-index:-1;
+    }
+
+    .container{
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 40px 18px 70px;
+    }
+
+    header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .title h1{
+      margin:0 0 8px 0;
+      font-size: clamp(28px, 4vw, 46px);
+      font-weight: 900;
+      letter-spacing: .2px;
+      text-shadow: 0 6px 26px rgba(0,0,0,.35);
+    }
+
+    .title p{
+      margin:0;
+      color: var(--muted);
+      font-size: 15.5px;
+      line-height: 1.8;
+      max-width: 90ch;
+    }
+
+    .badge{
+      flex: 0 0 auto;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.28);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow2);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      color: rgba(255,255,255,.82);
+      white-space: nowrap;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    @media (max-width: 980px){
+      header{ flex-direction: column; }
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: var(--glass);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      overflow:hidden;
+    }
+
+    .cardInner{
+      padding: 16px 16px 14px;
+    }
+
+    .card h2{
+      margin: 0 0 12px 0;
+      font-size: 18.5px;
+      font-weight: 900;
+      letter-spacing: .2px;
+      color: rgba(255,255,255,.90);
+    }
+
+    .muted{
+      color: var(--muted);
+      font-size: 14.6px;
+      line-height: 1.75;
+      margin: 0 0 10px 0;
+    }
+
+    .divider{
+      height: 1px;
+      background: rgba(255,255,255,.10);
+      margin: 14px 0;
+    }
+
+    /* info kv */
+    .kvs{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 520px){
+      .kvs{ grid-template-columns: 1fr; }
+    }
+    .kv{
+      background: rgba(0,0,0,.18);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--radius2);
+      padding: 12px 12px 10px;
+    }
+    .kv .k{
+      font-weight: 900;
+      font-size: 12.8px;
+      color: rgba(255,255,255,.86);
+      letter-spacing: .2px;
+      margin-bottom: 6px;
+    }
+    .kv .v{
+      font-family: var(--mono);
+      font-size: 12.7px;
+      color: rgba(255,255,255,.72);
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    /* form */
+    label{
+      display:block;
+      font-weight: 900;
+      font-size: 12.8px;
+      color: rgba(255,255,255,.86);
+      letter-spacing: .2px;
+      margin-bottom: 6px;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 680px){
+      .row{ grid-template-columns: 1fr; }
+    }
+
+    input[type="text"], input[type="number"], select{
+      width:100%;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.88);
+      outline:none;
+      font-size: 14px;
+    }
+    input.mono{ font-family: var(--mono); font-size: 12.8px; }
+
+    input[type="file"]{
+      width:100%;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.78);
+    }
+
+    .btnRow{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .btn{
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.20);
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.90);
+      font-weight: 900;
+      letter-spacing: .2px;
+      cursor:pointer;
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+    }
+    .btn:hover{
+      transform: translateY(-1px);
+      background: rgba(255,255,255,.14);
+      border-color: rgba(255,255,255,.28);
+    }
+    .btn:active{ transform: translateY(0); }
+    .btn.secondary{
+      background: rgba(0,0,0,.18);
+      border-color: rgba(255,255,255,.14);
+    }
+
+    /* status */
+    .status{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+    }
+    .statusLeft{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .dot{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.40);
+      box-shadow: 0 0 0 4px rgba(255,255,255,.08);
+      flex: 0 0 auto;
+    }
+    .statusMsg{
+      color: rgba(255,255,255,.72);
+      font-size: 13px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .statusRt{
+      font-family: var(--mono);
+      font-size: 12.3px;
+      color: rgba(255,255,255,.76);
+      white-space: nowrap;
+    }
+
+    /* results */
+    .resultGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    @media (max-width: 680px){
+      .resultGrid{ grid-template-columns: 1fr; }
+    }
+    .resultBox{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+    }
+    .resultBox .k{
+      font-weight: 900;
+      color: rgba(255,255,255,.86);
+      font-size: 12.8px;
+      letter-spacing: .2px;
+    }
+    .resultBox .v{
+      margin-top: 8px;
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: .2px;
+      color: rgba(255,255,255,.92);
+    }
+    .chips{
+      margin-top: 8px;
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+    }
+    .chip{
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(0,0,0,.16);
+      color: rgba(255,255,255,.78);
+      font-size: 12.4px;
+      font-family: var(--mono);
+      white-space: nowrap;
+    }
+
+    /* metrics */
+    .metrics{
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 1180px){
+      .metrics{ grid-template-columns: 1fr 1fr; }
+    }
+    .metric{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      font-weight: 900;
+      color: rgba(255,255,255,.86);
+    }
+    .metric .v{
+      font-family: var(--mono);
+      color: rgba(255,255,255,.88);
+      white-space: nowrap;
+    }
+    .metric .arrow{ color: rgba(255,255,255,.70); }
+
+    /* table */
+    table{
+      width:100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      border-radius: 14px;
+      overflow:hidden;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+    }
+    th, td{
+      padding: 10px 10px;
+      font-size: 13px;
+      color: rgba(255,255,255,.76);
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      text-align:left;
+      vertical-align: top;
+    }
+    th{
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.86);
+      font-weight: 900;
+      letter-spacing: .2px;
+    }
+    tr:last-child td{ border-bottom:0; }
+
+    footer{
+      margin-top: 18px;
+      text-align:center;
+      color: rgba(255,255,255,.62);
+      font-size: 12.8px;
+      line-height: 1.65;
+    }
+    .mono{ font-family: var(--mono); }
+
+    /* small helper */
+    .note{
+      color: rgba(255,255,255,.62);
+      font-size: 12.8px;
+      line-height: 1.65;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <div class="title">
+        <h1>MMDiT · 多模态协同数据生成</h1>
+        <p>
+          针对氧化锌回转窑冶炼过程中工况数据获取困难、多模态样本（视觉图像与传感器参数）时空对齐复杂的问题，
+          本系统提供基于 <b>MMDiT（Multi-Modal Diffusion Transformer）</b> 的联合生成前端界面。
+          支持条件控制生成特定故障工况与极端边缘场景的合成数据，用于缓解样本稀缺与分布不均衡，支撑智能监测与优化控制。
+        </p>
+      </div>
+
+      <div class="badge" id="buildBadge">Model: MMDiT · UI Build —</div>
+    </header>
+
+    <div class="grid">
+      <!-- 左：模型信息 + HTTP 接口 + 系统状态 -->
+      <section class="card">
+        <div class="cardInner">
+          <h2>模型信息</h2>
+
+          <div class="kvs">
+            <div class="kv">
+              <div class="k">任务定义</div>
+              <div class="v">Multimodal Co-generation (RGB + DCS)</div>
+            </div>
+            <div class="kv">
+              <div class="k">输入</div>
+              <div class="v">Condition: Class / Range / Prompt + Seed</div>
+            </div>
+            <div class="kv">
+              <div class="k">输出</div>
+              <div class="v">RGB images + aligned DCS sequences</div>
+            </div>
+            <div class="kv">
+              <div class="k">条件控制</div>
+              <div class="v">Over-burning / Normal / Under-burning</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <h2>推理接口（HTTP）</h2>
+          <p class="muted">
+            前端以 POST 请求调用生成服务，接口地址由 API_URL 指定。返回 JSON 包含生成路径、质量指标与耗时。
+          </p>
+
+          <div class="kvs">
+            <div class="kv">
+              <div class="k">Endpoint</div>
+              <div class="v">/generate</div>
+            </div>
+            <div class="kv">
+              <div class="k">Content-Type</div>
+              <div class="v">application/json</div>
+            </div>
+            <div class="kv">
+              <div class="k">Request JSON</div>
+              <div class="v">
+                class_label: string<br/>
+                num_per_class: int<br/>
+                steps: int<br/>
+                guidance: float<br/>
+                seed: int<br/>
+                out_dir: string
+              </div>
+            </div>
+            <div class="kv">
+              <div class="k">Response JSON</div>
+              <div class="v">
+                out_dir: string<br/>
+                metrics: object<br/>
+                latency_ms: number<br/>
+                timestamp: string
+              </div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <h2>系统状态</h2>
+          <div class="status">
+            <div class="statusLeft">
+              <div class="dot" id="dot"></div>
+              <div class="statusMsg" id="statusMsg">等待参数配置。</div>
+            </div>
+            <div class="statusRt" id="statusRt">READY</div>
+          </div>
+
+          <div class="note">
+            页面可部署到 GitHub Pages 公开访问；生成服务需部署在可访问的服务器并支持跨域（CORS）。
+          </div>
+        </div>
+      </section>
+
+      <!-- 右：参数配置 + 生成/评估 + 结果 -->
+      <aside class="card">
+        <div class="cardInner">
+          <h2>参数配置与执行</h2>
+
+          <div class="row">
+            <div>
+              <label for="classLabel">条件工况（class_label）</label>
+              <select id="classLabel">
+                <option>Over-burning</option>
+                <option selected>Normal</option>
+                <option>Under-burning</option>
+              </select>
+            </div>
+            <div>
+              <label for="numPerClass">每类生成数量（num_per_class）</label>
+              <input id="numPerClass" type="number" min="1" step="1" value="500"/>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <div>
+              <label for="steps">采样步数（steps）</label>
+              <input id="steps" type="number" min="1" step="1" value="50"/>
+            </div>
+            <div>
+              <label for="guidance">引导系数（guidance）</label>
+              <input id="guidance" type="number" step="0.1" value="4.0"/>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <div>
+              <label for="seed">随机种子（seed）</label>
+              <input id="seed" type="number" step="1" value="2026"/>
+            </div>
+            <div>
+              <label for="outDir">保存路径（out_dir）</label>
+              <input id="outDir" class="mono" type="text" value="/home/liuyan/Dataset/ZnKiln/Gen"/>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <div>
+              <label for="apiUrl">推理服务地址（API_URL）</label>
+              <input id="apiUrl" class="mono" type="text" value="https://YOUR_DOMAIN_OR_IP/generate"/>
+            </div>
+            <div>
+              <label for="device">设备（device）</label>
+              <select id="device">
+                <option>cuda:0</option>
+                <option>cuda:1</option>
+                <option>cuda:2</option>
+                <option>cuda:3</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btnRow">
+            <button class="btn" id="runBtn">🚀 开始生成</button>
+            <button class="btn secondary" id="resetBtn">⟲ 清空状态</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <h2>生成结果</h2>
+
+          <div class="resultGrid">
+            <div class="resultBox">
+              <div class="k">输出目录</div>
+              <div class="v mono" id="resOutDir">—</div>
+            </div>
+            <div class="resultBox">
+              <div class="k">耗时</div>
+              <div class="v mono" id="resLatency">—</div>
+            </div>
+          </div>
+
+          <div class="resultBox" style="margin-top:10px;">
+            <div class="k">质量指标（越低越好）</div>
+            <div class="metrics" style="margin-top:10px;">
+              <div class="metric">JFD <span class="v mono" id="mJFD">—</span> <span class="arrow">↓</span></div>
+              <div class="metric">JKID <span class="v mono" id="mJKID">—</span> <span class="arrow">↓</span></div>
+              <div class="metric">GCD <span class="v mono" id="mGCD">—</span> <span class="arrow">↓</span></div>
+              <div class="metric">CMCD <span class="v mono" id="mCMCD">—</span> <span class="arrow">↓</span></div>
+              <div class="metric">IMSD <span class="v mono" id="mIMSD">—</span> <span class="arrow">↓</span></div>
+            </div>
+          </div>
+
+          <div class="resultGrid" style="margin-top:10px;">
+            <div class="resultBox">
+              <div class="k">返回时间</div>
+              <div class="v mono" id="resTs">—</div>
+            </div>
+            <div class="resultBox">
+              <div class="k">运行摘要</div>
+              <div class="v" id="resSummary">—</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <h2>任务记录</h2>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:22%;">时间</th>
+                <th style="width:22%;">工况</th>
+                <th style="width:18%;">数量</th>
+                <th style="width:18%;">步数</th>
+                <th style="width:20%;">耗时</th>
+              </tr>
+            </thead>
+            <tbody id="history">
+              <tr>
+                <td class="mono">—</td>
+                <td>—</td>
+                <td class="mono">—</td>
+                <td class="mono">—</td>
+                <td class="mono">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      <div>© <span id="year"></span> MMDiT · Multimodal Co-generation · Hosted on GitHub Pages</div>
+      <div class="mono" style="margin-top:6px;">Direct URL: https://username.github.io/repo-name/</div>
+    </footer>
+  </div>
+
+  <script>
+    // build id：用于你确认 Pages 页面是否已同步更新
+    const bid = Math.random().toString(16).slice(2,10).toUpperCase();
+    document.getElementById("buildBadge").textContent = `Model: MMDiT · UI Build ${bid}`;
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const dot = document.getElementById("dot");
+    const statusMsg = document.getElementById("statusMsg");
+    const statusRt = document.getElementById("statusRt");
+
+    const classLabel = document.getElementById("classLabel");
+    const numPerClass = document.getElementById("numPerClass");
+    const steps = document.getElementById("steps");
+    const guidance = document.getElementById("guidance");
+    const seed = document.getElementById("seed");
+    const outDir = document.getElementById("outDir");
+    const apiUrl = document.getElementById("apiUrl");
+    const device = document.getElementById("device");
+
+    const runBtn = document.getElementById("runBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const resOutDir = document.getElementById("resOutDir");
+    const resLatency = document.getElementById("resLatency");
+    const resTs = document.getElementById("resTs");
+    const resSummary = document.getElementById("resSummary");
+
+    const mJFD = document.getElementById("mJFD");
+    const mJKID = document.getElementById("mJKID");
+    const mGCD = document.getElementById("mGCD");
+    const mCMCD = document.getElementById("mCMCD");
+    const mIMSD = document.getElementById("mIMSD");
+
+    const history = document.getElementById("history");
+
+    function setStatus(state, msg, rt){
+      statusMsg.textContent = msg;
+      statusRt.textContent = rt;
+
+      if(state === "READY"){
+        dot.style.background = "rgba(255,255,255,.40)";
+      }else if(state === "WORKING"){
+        dot.style.background = "rgba(251,191,36,.95)";
+      }else if(state === "OK"){
+        dot.style.background = "rgba(74,222,128,.95)";
+      }else if(state === "ERROR"){
+        dot.style.background = "rgba(248,113,113,.95)";
+      }
+    }
+
+    function clearAll(){
+      setStatus("READY", "等待参数配置。", "READY");
+      resOutDir.textContent = "—";
+      resLatency.textContent = "—";
+      resTs.textContent = "—";
+      resSummary.textContent = "—";
+      mJFD.textContent = "—";
+      mJKID.textContent = "—";
+      mGCD.textContent = "—";
+      mCMCD.textContent = "—";
+      mIMSD.textContent = "—";
+      history.innerHTML = `
+        <tr>
+          <td class="mono">—</td>
+          <td>—</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+          <td class="mono">—</td>
+        </tr>`;
+    }
+
+    function addHistoryRow(ts, label, n, st, latMs){
+      const placeholder = history.children.length === 1 && history.children[0].innerText.includes("—");
+      if(placeholder) history.innerHTML = "";
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="mono">${ts}</td>
+        <td>${label}</td>
+        <td class="mono">${n}</td>
+        <td class="mono">${st}</td>
+        <td class="mono">${latMs} ms</td>
+      `;
+      history.prepend(tr);
+    }
+
+    function validate(){
+      const url = (apiUrl.value || "").trim();
+      if(!url.startsWith("http://") && !url.startsWith("https://")){
+        return "API_URL 必须以 http:// 或 https:// 开头。";
+      }
+      const n = Number(numPerClass.value);
+      if(!(n >= 1)) return "num_per_class 必须为正整数。";
+      const s = Number(steps.value);
+      if(!(s >= 1)) return "steps 必须为正整数。";
+      const g = Number(guidance.value);
+      if(!Number.isFinite(g)) return "guidance 必须为数字。";
+      const sd = Number(seed.value);
+      if(!Number.isFinite(sd)) return "seed 必须为数字。";
+      if(!(outDir.value || "").trim()) return "out_dir 不能为空。";
+      return null;
+    }
+
+    async function run(){
+      const err = validate();
+      if(err){
+        setStatus("ERROR", err, "INPUT_ERROR");
+        return;
+      }
+
+      setStatus("WORKING", "正在请求生成服务，请稍候。", "WORKING");
+      runBtn.disabled = true;
+
+      const payload = {
+        class_label: String(classLabel.value),
+        num_per_class: parseInt(numPerClass.value, 10),
+        steps: parseInt(steps.value, 10),
+        guidance: Number(guidance.value),
+        seed: parseInt(seed.value, 10),
+        out_dir: String(outDir.value),
+        device: String(device.value)
+      };
+
+      const t0 = performance.now();
+      try{
+        const resp = await fetch(apiUrl.value.trim(), {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(payload)
+        });
+        const t1 = performance.now();
+
+        if(!resp.ok){
+          const text = await resp.text().catch(()=> "");
+          setStatus("ERROR", `服务返回 HTTP ${resp.status}${text ? "，详情：" + text : ""}`, "HTTP_ERROR");
+          return;
+        }
+
+        const data = await resp.json();
+
+        const out = String(data.out_dir ?? "");
+        const lat = Number.isFinite(Number(data.latency_ms)) ? Number(data.latency_ms) : Math.round(t1 - t0);
+        const ts = String(data.timestamp ?? new Date().toISOString());
+        const metrics = (data.metrics && typeof data.metrics === "object") ? data.metrics : {};
+
+        resOutDir.textContent = out || payload.out_dir;
+        resLatency.textContent = `${lat} ms`;
+        resTs.textContent = ts;
+
+        // 指标
+        mJFD.textContent  = (metrics.JFD  ?? metrics.jfd  ?? "—");
+        mJKID.textContent = (metrics.JKID ?? metrics.jkid ?? "—");
+        mGCD.textContent  = (metrics.GCD  ?? metrics.gcd  ?? "—");
+        mCMCD.textContent = (metrics.CMCD ?? metrics.cmcd ?? "—");
+        mIMSD.textContent = (metrics.IMSD ?? metrics.imsd ?? "—");
+
+        resSummary.textContent =
+          `工况=${payload.class_label}，数量=${payload.num_per_class}，steps=${payload.steps}，guidance=${payload.guidance}，seed=${payload.seed}`;
+
+        addHistoryRow(ts, payload.class_label, payload.num_per_class, payload.steps, lat);
+        setStatus("OK", "生成完成，结果已更新。", "OK");
+      }catch(e){
+        const msg = (e && e.message) ? e.message : String(e);
+        setStatus("ERROR", `无法连接生成服务：${msg}`, "NETWORK_ERROR");
+      }finally{
+        runBtn.disabled = false;
+      }
+    }
+
+    runBtn.addEventListener("click", run);
+    resetBtn.addEventListener("click", clearAll);
+
+    clearAll();
+  </script>
+</body>
+</html>
